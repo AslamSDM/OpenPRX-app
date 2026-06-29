@@ -1,0 +1,64 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:3372826427060867155",
+      "lastPropertyId": "7:5245557693460156842",
+      "name": "DocChunk",
+      "properties": [
+        {
+          "id": "1:5002098342273472806",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1527972323303105861",
+          "name": "sourceName",
+          "type": 9
+        },
+        {
+          "id": "3:3366655718823272124",
+          "name": "conversationId",
+          "type": 9
+        },
+        {
+          "id": "4:6947437144984160587",
+          "name": "text",
+          "type": 9
+        },
+        {
+          "id": "5:7217013785208838157",
+          "name": "seq",
+          "type": 6
+        },
+        {
+          "id": "6:4013227898018163696",
+          "name": "global",
+          "type": 1
+        },
+        {
+          "id": "7:5245557693460156842",
+          "name": "embedding",
+          "type": 28,
+          "flags": 8,
+          "indexId": "1:8621806439227068997"
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "1:3372826427060867155",
+  "lastIndexId": "1:8621806439227068997",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}
