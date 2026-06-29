@@ -30,11 +30,19 @@ Repository: `git@github.com:AslamSDM/OpenPRX-app.git`
 ### Build commands
 
 ```bash
-flutter build ios --simulator
-flutter build apk --debug
-flutter analyze
-flutter test
+flutter build ios --simulator          # verified passing
+flutter build ios --no-codesign        # verified passing (device build, unsigned)
+flutter build apk --debug              # verified passing
+flutter analyze                        # verified passing
+flutter test                           # verified passing
 ```
+
+## Signing / deployment notes
+
+- iOS simulator builds pass.
+- iOS **device** builds compile successfully with `--no-codesign`, but a real
+  deployment requires an Apple Developer Team ID / signing certificate configured
+  in `ios/Runner.xcodeproj`.
 
 ## Important code conventions / gotchas
 
