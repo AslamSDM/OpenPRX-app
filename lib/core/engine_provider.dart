@@ -34,6 +34,7 @@ class EngineStatus {
 /// Holds the active [LlamaEngine] and exposes a Riverpod-managed status.
 class LlamaEngineManager extends ChangeNotifier {
   LlamaEngine? _engine;
+  LlamaEngine? _embedEngine;
   EngineStatus _status = const EngineStatus();
   String? _activeModelId;
 
@@ -86,6 +87,13 @@ class LlamaEngineManager extends ChangeNotifier {
       options: ModelLoadOptions(cachePolicy: ModelCachePolicy.preferCached),
     );
     return engine;
+  }
+
+  /// Embed [text] using a lazily-loaded embedding model. The embedding engine is
+  /// cached and shared across calls; it is unloaded when this manager disposes.
+  Future<List<double>> embed(String text) async {
+    _embedEngine ??= await loadSource(kDefaultEmbeddingUri);
+    return _embedEngine!.embed(text);
   }
 
   /// Generate streaming tokens for [prompt].
@@ -146,6 +154,10 @@ class LlamaEngineManager extends ChangeNotifier {
       await _engine!.dispose();
       _engine = null;
     }
+    if (_embedEngine != null) {
+      await _embedEngine!.dispose();
+      _embedEngine = null;
+    }
     _activeModelId = null;
     _status = const EngineStatus();
     notifyListeners();
@@ -154,6 +166,7 @@ class LlamaEngineManager extends ChangeNotifier {
   @override
   void dispose() {
     _engine?.dispose();
+    _embedEngine?.dispose();
     super.dispose();
   }
 }

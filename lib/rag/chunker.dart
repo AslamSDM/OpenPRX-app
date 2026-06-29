@@ -14,8 +14,9 @@ class Chunker {
       final end = (start + chunkSize).clamp(0, cleaned.length);
       chunks.add(cleaned.substring(start, end));
       if (end == cleaned.length) break;
-      start = (start + chunkSize - overlap).clamp(0, cleaned.length);
-      if (start <= chunks.last.length + (chunks.length - 1) * (chunkSize - overlap)) break;
+      final nextStart = start + chunkSize - overlap;
+      if (nextStart <= start) break; // overlap >= chunkSize would loop
+      start = nextStart;
     }
     return chunks.where((c) => c.trim().isNotEmpty).toList();
   }

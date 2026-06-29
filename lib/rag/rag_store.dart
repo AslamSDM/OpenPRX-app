@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import '../core/engine_provider.dart';
-import '../core/model_catalog.dart';
 import 'objectbox_store.dart';
 import '../objectbox.g.dart';
 
@@ -40,36 +39,22 @@ class ObjectBoxStore extends ChangeNotifier {
   }) async {
     if (!_ready) throw StateError('ObjectBox not initialized');
 
-    // Switch the shared engine to the embedding model temporarily.
-    final chatModelId = engine.activeModelId;
-    await engine.unload();
-
-    final embedEngine = await engine.loadSource(kDefaultEmbeddingUri);
-    try {
-      for (var i = 0; i < chunks.length; i++) {
-        final vector = await embedEngine.embed(chunks[i]);
-        if (vector.length != kEmbeddingDimensions) {
-          // If the model emits a different dimension, skip rather than crash.
-          continue;
-        }
-        final chunk = DocChunk(
-          sourceName: sourceName,
-          conversationId: conversationId,
-          text: chunks[i],
-          seq: i,
-          global: global,
-          embedding: vector,
-        );
-        _box.put(chunk);
-        onProgress?.call(i + 1, chunks.length);
+    for (var i = 0; i < chunks.length; i++) {
+      final vector = await engine.embed(chunks[i]);
+      if (vector.length != kEmbeddingDimensions) {
+        // If the model emits a different dimension, skip rather than crash.
+        continue;
       }
-    } finally {
-      await embedEngine.dispose();
-      // Reload the previous chat model if there was one.
-      if (chatModelId != null) {
-        final entry = findModelById(chatModelId);
-        if (entry != null) await engine.loadModel(entry);
-      }
+      final chunk = DocChunk(
+        sourceName: sourceName,
+        conversationId: conversationId,
+        text: chunks[i],
+        seq: i,
+        global: global,
+        embedding: vector,
+      );
+      _box.put(chunk);
+      onProgress?.call(i + 1, chunks.length);
     }
   }
 

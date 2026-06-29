@@ -92,14 +92,16 @@ class AgentLoop {
     args.onSources?.call(results);
     args.onSteps?.call([...steps]);
 
-    steps.add(AgentStep(label: 'Reading ${results.take(3).length} sources'));
-    args.onSteps?.call([...steps]);
-    final pages = await _readPages(results.take(3).toList());
-    steps[1].status = StepStatus.done;
-    args.onSteps?.call([...steps]);
+    if (results.isNotEmpty) {
+      steps.add(AgentStep(label: 'Reading ${results.take(3).length} sources'));
+      args.onSteps?.call([...steps]);
+      await _readPages(results.take(3).toList());
+      steps[1].status = StepStatus.done;
+      args.onSteps?.call([...steps]);
+    }
 
     final system = _buildSystemPrompt(
-      webSources: pages,
+      webSources: results.isNotEmpty ? results : null,
       ragChunks: args.ragContext,
     );
     await _streamAnswer(
@@ -138,11 +140,14 @@ class AgentLoop {
     args.onSteps?.call([...steps]);
 
     final top = allSources.take(6).toList();
-    steps.add(AgentStep(label: 'Reading ${top.length} sources'));
-    args.onSteps?.call([...steps]);
-    final pages = await _readPages(top);
-    steps[2].status = StepStatus.done;
-    args.onSteps?.call([...steps]);
+    List<WebSource>? pages;
+    if (top.isNotEmpty) {
+      steps.add(AgentStep(label: 'Reading ${top.length} sources'));
+      args.onSteps?.call([...steps]);
+      pages = await _readPages(top);
+      steps[2].status = StepStatus.done;
+      args.onSteps?.call([...steps]);
+    }
 
     steps.add(AgentStep(label: 'Synthesizing report'));
     args.onSteps?.call([...steps]);
@@ -202,8 +207,13 @@ class AgentLoop {
     List<ToolDefinition>? tools,
     void Function(String token)? onToken,
   }) async {
+    final llama = engine.engine;
+    if (llama == null) {
+      onToken?.call('No model loaded. Download and load a model first.');
+      return;
+    }
     final messages = [...history, LlamaChatMessage.fromText(role: LlamaChatRole.user, text: user)];
-    final session = ChatSession(engine.engine!, systemPrompt: system);
+    final session = ChatSession(llama, systemPrompt: system);
     final parts = messages.map((m) => LlamaTextContent(m.content)).toList();
     await for (final chunk in session.create(
       parts,

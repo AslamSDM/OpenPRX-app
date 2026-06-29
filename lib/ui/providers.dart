@@ -34,19 +34,22 @@ final firecrawlClientProvider = Provider<FirecrawlClient?>((ref) {
   );
 });
 
-final objectBoxStoreProvider = ChangeNotifierProvider<ObjectBoxStore>((ref) {
+final objectBoxStoreProvider = FutureProvider<ObjectBoxStore>((ref) async {
   final store = ObjectBoxStore();
-  store.initialize();
+  await store.initialize();
   return store;
 });
+
+final homeIndexProvider = StateProvider<int>((ref) => 0);
 
 final agentLoopProvider = Provider<AgentLoop>((ref) {
   final engine = ref.watch(llamaEngineProvider);
   final firecrawl = ref.watch(firecrawlClientProvider);
-  final objectBox = ref.watch(objectBoxStoreProvider);
+  final objectBoxAsync = ref.watch(objectBoxStoreProvider);
+  final objectBox = objectBoxAsync.whenOrNull(data: (s) => s);
   return AgentLoop(
     engine: engine,
     firecrawl: firecrawl,
-    objectBox: objectBox.ready ? objectBox : null,
+    objectBox: objectBox,
   );
 });

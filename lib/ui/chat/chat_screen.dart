@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:llamadart/llamadart.dart';
 import '../../agent/agent_loop.dart';
-import '../../core/device_memory.dart';
 import '../../core/engine_provider.dart';
-import '../../core/model_catalog.dart';
 import '../../rag/rag_store.dart';
 import '../providers.dart';
 import 'message_bubble.dart';
@@ -21,6 +20,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  final _inputFocus = FocusNode();
   int? _conversationId;
   AgentMode _mode = AgentMode.chat;
   bool _busy = false;
@@ -29,21 +29,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final List<WebSource> _sources = [];
 
   @override
-  void initState() {
-    super.initState();
-    _maybeLoadDefaultModel();
-  }
-
-  Future<void> _maybeLoadDefaultModel() async {
-    final engine = ref.read(llamaEngineProvider);
-    if (engine.status.loadedModelId != null) return;
-    final ram = await DeviceMemory.totalMb();
-    final recommended = recommendedModel(ram);
-    final settings = await ref.read(settingsStoreProvider.future);
-    final savedId = settings.defaultModelId;
-    final target = (savedId != null ? findModelById(savedId) : null) ?? recommended;
-    if (!mounted) return;
-    await engine.loadModel(target);
+  void dispose() {
+    _inputFocus.dispose();
+    super.dispose();
   }
 
   Future<void> _send() async {
@@ -71,18 +59,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     final agent = ref.read(agentLoopProvider);
     final engine = ref.read(llamaEngineProvider);
-    final objectBox = ref.read(objectBoxStoreProvider);
 
     // RAG retrieval
     List<DocChunk> ragChunks = [];
-    if (objectBox.ready && _conversationId != null) {
+    if (_conversationId != null) {
       try {
-        final embedEngine = await engine.loadSource(kDefaultEmbeddingUri);
-        try {
-          final vector = await embedEngine.embed(text);
-          ragChunks = objectBox.retrieve(vector, conversationId: _conversationId.toString(), topK: 5);
-        } finally {
-          await embedEngine.dispose();
+        final vector = await engine.embed(text);
+        final objectBoxAsync = ref.read(objectBoxStoreProvider);
+        final objectBox = objectBoxAsync.whenOrNull(data: (s) => s);
+        if (objectBox?.ready == true) {
+          ragChunks = objectBox!.retrieve(vector, conversationId: _conversationId.toString(), topK: 5);
         }
       } catch (_) {
         // RAG is optional; continue without it.
@@ -162,7 +148,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: Column(
         children: [
           if (engineStatus.state != EngineState.ready && engineStatus.state != EngineState.generating)
-            _EngineStatusBar(status: engineStatus),
+            _EngineStatusBar(
+              status: engineStatus,
+              onGoToModels: () => ref.read(homeIndexProvider.notifier).state = 1,
+            ),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -181,15 +170,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    minLines: 1,
-                    maxLines: 6,
-                    decoration: const InputDecoration(
-                      hintText: 'Ask anything...',
-                      border: OutlineInputBorder(),
+                  child: Focus(
+                    onKeyEvent: (node, event) {
+                      if (event is KeyDownEvent &&
+                          event.logicalKey == LogicalKeyboardKey.enter &&
+                          !HardwareKeyboard.instance.isShiftPressed) {
+                        _send();
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _inputFocus,
+                      minLines: 1,
+                      maxLines: 6,
+                      textInputAction: TextInputAction.send,
+                      decoration: const InputDecoration(
+                        hintText: 'Ask anything... (Enter to send, Shift+Enter for newline)',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (_) => _send(),
                     ),
-                    onSubmitted: (_) => _send(),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -235,12 +237,41 @@ class _ModeChip extends StatelessWidget {
 
 class _EngineStatusBar extends StatelessWidget {
   final dynamic status;
-  const _EngineStatusBar({required this.status});
+  final VoidCallback? onGoToModels;
+  const _EngineStatusBar({required this.status, this.onGoToModels});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (status.state == EngineState.idle) {
+      return Container(
+        width: double.infinity,
+        color: colorScheme.surfaceContainerHighest,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'No model loaded yet.',
+              style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Download a GGUF model from the Models tab to start chatting locally.',
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
+            ),
+            if (onGoToModels != null) ...[
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                onPressed: onGoToModels,
+                child: const Text('Go to Models'),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
     final text = switch (status.state) {
-      EngineState.idle => 'No model loaded. Download a model in the Models tab.',
       EngineState.loading => 'Loading model...',
       EngineState.error => 'Model error: ${status.error ?? 'unknown'}',
       _ => null,
@@ -248,9 +279,9 @@ class _EngineStatusBar extends StatelessWidget {
     if (text == null) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
-      color: Theme.of(context).colorScheme.errorContainer,
+      color: colorScheme.errorContainer,
       padding: const EdgeInsets.all(10),
-      child: Text(text, style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer)),
+      child: Text(text, style: TextStyle(color: colorScheme.onErrorContainer)),
     );
   }
 }

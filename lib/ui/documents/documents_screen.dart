@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as path;
 import '../../core/engine_provider.dart';
 import '../../rag/chunker.dart';
+import '../../rag/rag_store.dart';
 import '../../services/pdf_service.dart';
 import '../providers.dart';
 
@@ -22,40 +23,48 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final store = ref.watch(objectBoxStoreProvider);
+    final storeAsync = ref.watch(objectBoxStoreProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Documents')),
       body: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Add PDFs to make them searchable in the current conversation.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _ingesting ? null : _pickAndIngest,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Pick PDF'),
-            ),
-            const SizedBox(height: 12),
-            if (_ingesting) ...[
-              LinearProgressIndicator(),
-              const SizedBox(height: 8),
-              Text(_status),
-            ],
-            if (store.ready) ...[
-              const SizedBox(height: 16),
-              Text('Library', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              Expanded(child: _DocumentList()),
-            ],
-          ],
+        child: storeAsync.when(
+          data: (store) => _buildBody(context, store),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('Store error: $e')),
         ),
       ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, ObjectBoxStore store) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Add PDFs to make them searchable in the current conversation.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: _ingesting ? null : _pickAndIngest,
+          icon: const Icon(Icons.upload_file),
+          label: const Text('Pick PDF'),
+        ),
+        const SizedBox(height: 12),
+        if (_ingesting) ...[
+          const LinearProgressIndicator(),
+          const SizedBox(height: 8),
+          Text(_status),
+        ],
+        if (store.ready) ...[
+          const SizedBox(height: 16),
+          Text('Library', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Expanded(child: _DocumentList()),
+        ],
+      ],
     );
   }
 
@@ -88,7 +97,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     final chunks = const Chunker().split(text);
 
     final engine = ref.read(llamaEngineProvider);
-    final store = ref.read(objectBoxStoreProvider);
+    final store = await ref.read(objectBoxStoreProvider.future);
 
     setState(() => _status = 'Embedding ${chunks.length} chunks...');
     await store.ingestChunks(
@@ -109,33 +118,37 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
 class _DocumentList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final store = ref.watch(objectBoxStoreProvider);
-    // Simple grouping by source name.
-    final query = store.box.query().build();
-    final docs = query.find();
-    query.close();
+    final storeAsync = ref.watch(objectBoxStoreProvider);
+    return storeAsync.when(
+      data: (store) {
+        // Simple grouping by source name.
+        final query = store.box.query().build();
+        final docs = query.find();
+        query.close();
 
-    final bySource = <String, int>{};
-    for (final d in docs) {
-      bySource[d.sourceName] = (bySource[d.sourceName] ?? 0) + 1;
-    }
-    final names = bySource.keys.toList()..sort();
+        final bySource = <String, int>{};
+        for (final d in docs) {
+          bySource[d.sourceName] = (bySource[d.sourceName] ?? 0) + 1;
+        }
+        final names = bySource.keys.toList()..sort();
 
-    return ListView.builder(
-      itemCount: names.length,
-      itemBuilder: (context, index) {
-        final name = names[index];
-        return ListTile(
-          title: Text(name),
-          subtitle: Text('${bySource[name]} chunks'),
-          trailing: IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () {
-              store.deleteBySource(name);
-            },
-          ),
+        return ListView.builder(
+          itemCount: names.length,
+          itemBuilder: (context, index) {
+            final name = names[index];
+            return ListTile(
+              title: Text(name),
+              subtitle: Text('${bySource[name]} chunks'),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => store.deleteBySource(name),
+              ),
+            );
+          },
         );
       },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Store error: $e')),
     );
   }
 }

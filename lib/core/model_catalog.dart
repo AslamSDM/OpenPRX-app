@@ -46,6 +46,18 @@ const String kDefaultEmbeddingUri =
 /// memory + OS overhead.
 const List<ModelEntry> kModelCatalog = [
   ModelEntry(
+    id: 'lfm-2.5-230m-q4',
+    name: 'LFM 2.5 230M',
+    family: 'lfm',
+    hfUri: 'hf://LiquidAI/LFM2.5-230M-GGUF/LFM2.5-230M-Q4_0.gguf',
+    paramsB: 0,
+    quant: 'Q4_0',
+    sizeBytes: 168_000_000,
+    minRamMb: 900,
+    description: 'Tinyest option. Runs on very low-end devices; quality is limited.',
+    tags: ['tiny', 'fast'],
+  ),
+  ModelEntry(
     id: 'llama-3.2-1b-q4',
     name: 'Llama 3.2 1B Instruct',
     family: 'llama3.2',
@@ -121,14 +133,7 @@ RamTier ramTierFromTotalMb(int totalRamMb) {
 /// Returns models that should run comfortably on this device, sorted from
 /// smallest to largest. The first entry is the "best" practical default.
 List<ModelEntry> recommendModels(int totalRamMb) {
-  final tier = ramTierFromTotalMb(totalRamMb);
-  final maxRam = switch (tier) {
-    RamTier.low => 3 * 1024,
-    RamTier.medium => 5 * 1024,
-    RamTier.high => 7 * 1024,
-    RamTier.flagship => 64 * 1024,
-  };
-  final eligible = kModelCatalog.where((m) => m.minRamMb <= maxRam).toList();
+  final eligible = kModelCatalog.where((m) => m.minRamMb <= totalRamMb).toList();
   eligible.sort((a, b) => a.sizeBytes.compareTo(b.sizeBytes));
   return eligible;
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'ui/chat/chat_screen.dart';
 import 'ui/models/models_screen.dart';
 import 'ui/documents/documents_screen.dart';
 import 'ui/settings/settings_screen.dart';
+import 'ui/providers.dart';
 
 class OpenPrxApp extends StatelessWidget {
   const OpenPrxApp({super.key});
@@ -29,21 +31,20 @@ class OpenPrxApp extends StatelessWidget {
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         useMaterial3: true,
       ),
+      themeMode: ThemeMode.dark,
       home: const HomeShell(),
     );
   }
 }
 
-class HomeShell extends StatefulWidget {
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
+  ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
-  int _index = 0;
-
+class _HomeShellState extends ConsumerState<HomeShell> {
   final _screens = const [
     ChatScreen(),
     ModelsScreen(),
@@ -53,11 +54,12 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final index = ref.watch(homeIndexProvider);
     return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
+      body: IndexedStack(index: index, children: _screens),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        selectedIndex: index,
+        onDestinationSelected: (i) => ref.read(homeIndexProvider.notifier).state = i,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
           NavigationDestination(icon: Icon(Icons.model_training), label: 'Models'),
