@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -84,6 +85,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .toList();
 
     final buffer = StringBuffer();
+    List<WebSource> responseSources = [];
     try {
       await agent.run(AgentRunArgs(
         question: text,
@@ -94,31 +96,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         onToken: (token) {
           buffer.write(token);
           setState(() {
-            _messages.last = ChatMessageModel(role: 'assistant', content: buffer.toString(), streaming: true);
+            _messages.last = _messages.last.copyWith(
+              content: buffer.toString(),
+              streaming: true,
+            );
           });
           _scrollToBottom();
         },
         onSteps: (steps) => setState(() => _steps..clear()..addAll(steps)),
-        onSources: (sources) => setState(() => _sources..clear()..addAll(sources)),
+        onSources: (sources) {
+          responseSources = sources;
+          setState(() => _sources..clear()..addAll(sources));
+        },
       ));
     } catch (e) {
       setState(() {
-        _messages.last = ChatMessageModel(role: 'assistant', content: 'Error: $e');
+        _messages.last = _messages.last.copyWith(content: 'Error: $e', streaming: false);
       });
     } finally {
       setState(() {
         _busy = false;
-        _messages.last = ChatMessageModel(role: 'assistant', content: buffer.toString());
+        _messages.last = _messages.last.copyWith(
+          content: buffer.toString(),
+          streaming: false,
+          sources: responseSources,
+        );
         _steps.clear();
       });
-      await db.updateMessage(assistantMessageId, buffer.toString(), sourcesJson: _sourcesJson(_sources));
+      await db.updateMessage(assistantMessageId, buffer.toString(), sourcesJson: _sourcesJson(responseSources));
       _scrollToBottom();
     }
   }
 
   String _sourcesJson(List<WebSource> sources) {
     if (sources.isEmpty) return '';
-    return sources.map((s) => '{"url":"${s.url}","title":"${s.title}"}').join(',');
+    return jsonEncode(sources.map((s) => s.toJson()).toList());
   }
 
   void _scrollToBottom() {

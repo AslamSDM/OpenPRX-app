@@ -34,6 +34,11 @@ final firecrawlClientProvider = Provider<FirecrawlClient?>((ref) {
   );
 });
 
+final webToolsEnabledProvider = Provider<bool>((ref) {
+  final settingsAsync = ref.watch(settingsStoreProvider);
+  return settingsAsync.whenOrNull(data: (s) => s.webToolsEnabled) ?? true;
+});
+
 final objectBoxStoreProvider = FutureProvider<ObjectBoxStore>((ref) async {
   final store = ObjectBoxStore();
   await store.initialize();
@@ -47,9 +52,11 @@ final agentLoopProvider = Provider<AgentLoop>((ref) {
   final firecrawl = ref.watch(firecrawlClientProvider);
   final objectBoxAsync = ref.watch(objectBoxStoreProvider);
   final objectBox = objectBoxAsync.whenOrNull(data: (s) => s);
+  final webToolsEnabled = ref.watch(webToolsEnabledProvider);
   return AgentLoop(
     engine: engine,
     firecrawl: firecrawl,
     objectBox: objectBox,
+    webToolsEnabled: webToolsEnabled,
   );
 });

@@ -16,6 +16,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _tokenController = TextEditingController();
   double _temperature = 0.7;
   int _contextSize = 4096;
+  bool _webToolsEnabled = true;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +28,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         data: (settings) {
           _urlController.text = settings.firecrawlUrl ?? '';
           _tokenController.text = settings.firecrawlToken ?? '';
+          _webToolsEnabled = settings.webToolsEnabled;
           _temperature = settings.temperature;
           _contextSize = settings.contextSize;
 
@@ -51,6 +53,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   border: OutlineInputBorder(),
                 ),
                 obscureText: true,
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                title: const Text('Enable web tools in Chat'),
+                subtitle: const Text('Lets the model run web_search / fetch_page on demand'),
+                value: settings.webToolsEnabled,
+                onChanged: (v) => setState(() => _webToolsEnabled = v),
               ),
               const SizedBox(height: 12),
               ElevatedButton(
@@ -119,6 +128,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _save(SettingsStore settings) async {
     await settings.setFirecrawlUrl(_urlController.text.trim());
     await settings.setFirecrawlToken(_tokenController.text.trim());
+    await settings.setWebToolsEnabled(_webToolsEnabled);
     await settings.setTemperature(_temperature);
     await settings.setContextSize(_contextSize);
     if (mounted) {

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsStore {
   static const String _firecrawlUrl = 'firecrawl_url';
   static const String _firecrawlToken = 'firecrawl_token';
+  static const String _webToolsEnabled = 'web_tools_enabled';
   static const String _defaultModelId = 'default_model_id';
   static const String _temperature = 'temperature';
   static const String _contextSize = 'context_size';
@@ -22,6 +23,10 @@ class SettingsStore {
   String? get firecrawlToken => _prefs.getString(_firecrawlToken);
   Future<void> setFirecrawlToken(String? value) async =>
       _setString(_firecrawlToken, value);
+
+  bool get webToolsEnabled => _prefs.getBool(_webToolsEnabled) ?? true;
+  Future<void> setWebToolsEnabled(bool value) async =>
+      _prefs.setBool(_webToolsEnabled, value);
 
   String? get defaultModelId => _prefs.getString(_defaultModelId);
   Future<void> setDefaultModelId(String? value) async =>

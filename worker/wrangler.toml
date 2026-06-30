@@ -1,0 +1,7 @@
+:schema import {"./node_modules/wrangler/config-schema.json"}
+
+name = "openprx-firecrawl"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+# Set FIRECRAWL_API_KEY and optionally APP_TOKEN via `wrangler secret put`.

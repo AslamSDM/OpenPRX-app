@@ -59,6 +59,15 @@ flutter test                           # verified passing
 libraries require API 34. We force every Android subproject to `compileSdk 36` in
 `android/build.gradle.kts`. Do not remove that override unless ObjectBox updates.
 
+## Web tools / Firecrawl Worker
+
+- Worker source lives in `worker/`. It proxies Firecrawl.dev search/scrape.
+- Required env: `FIRECRAWL_API_KEY`. Optional gate: `APP_TOKEN`.
+- App Settings lets the user set the Worker URL, optional bearer token, and
+  toggle `web_search` / `fetch_page` tools in Chat mode.
+- Search / Research modes always use the web.
+- Assistant messages render citation chips (`[1]`, `[2]`) that open URLs.
+
 ## Next known work
 
 1. Test end-to-end local chat with a downloaded GGUF model.

@@ -48,8 +48,14 @@ class AgentLoop {
   final LlamaEngineManager engine;
   final FirecrawlClient? firecrawl;
   final ObjectBoxStore? objectBox;
+  final bool webToolsEnabled;
 
-  AgentLoop({required this.engine, this.firecrawl, this.objectBox});
+  AgentLoop({
+    required this.engine,
+    this.firecrawl,
+    this.objectBox,
+    this.webToolsEnabled = true,
+  });
 
   Future<void> run(AgentRunArgs args) async {
     switch (args.mode) {
@@ -64,18 +70,19 @@ class AgentLoop {
 
   Future<void> _runChat(AgentRunArgs args) async {
     final tools = <ToolDefinition>[];
-    if (firecrawl?.isConfigured == true) {
+    if (webToolsEnabled && firecrawl?.isConfigured == true) {
       tools.add(_webSearchTool);
       tools.add(_fetchPageTool);
     }
 
-    final system = _buildSystemPrompt(ragChunks: args.ragContext);
+    final system = _buildSystemPrompt(ragChunks: args.ragContext, tools: tools);
     await _streamAnswer(
       system: system,
       history: args.history,
       user: args.question,
       tools: tools.isNotEmpty ? tools : null,
       onToken: args.onToken,
+      onSources: args.onSources,
     );
   }
 
@@ -206,6 +213,7 @@ class AgentLoop {
     required String user,
     List<ToolDefinition>? tools,
     void Function(String token)? onToken,
+    void Function(List<WebSource> sources)? onSources,
   }) async {
     final llama = engine.engine;
     if (llama == null) {
@@ -215,14 +223,55 @@ class AgentLoop {
     final messages = [...history, LlamaChatMessage.fromText(role: LlamaChatRole.user, text: user)];
     final session = ChatSession(llama, systemPrompt: system);
     final parts = messages.map((m) => LlamaTextContent(m.content)).toList();
+
+    final toolSources = <WebSource>[];
+    final effectiveTools = tools?.map((t) => _wrapTool(t, toolSources)).toList();
+
     await for (final chunk in session.create(
       parts,
       params: GenerationParams(maxTokens: 2048),
-      tools: tools,
+      tools: effectiveTools,
     )) {
       final delta = chunk.choices.firstOrNull?.delta;
       final text = delta?.content;
       if (text != null) onToken?.call(text);
+    }
+    if (toolSources.isNotEmpty) onSources?.call(toolSources);
+  }
+
+  /// Returns a new [ToolDefinition] whose handler records any [WebSource]
+  /// results in [sink] before returning the original result string.
+  ToolDefinition _wrapTool(ToolDefinition tool, List<WebSource> sink) {
+    return ToolDefinition(
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+      handler: (params) async {
+        final result = await tool.handler(params);
+        _tryCollectSources(result, sink);
+        return result;
+      },
+    );
+  }
+
+  void _tryCollectSources(dynamic result, List<WebSource> sink) {
+    if (result is! String) return;
+    try {
+      final decoded = jsonDecode(result);
+      if (decoded is List) {
+        for (final item in decoded) {
+          if (item is Map) {
+            sink.add(WebSource.fromJson(item.cast<String, dynamic>()));
+          }
+        }
+      } else if (decoded is Map) {
+        final url = decoded['url']?.toString() ?? '';
+        if (url.isNotEmpty) {
+          sink.add(WebSource.fromJson(decoded.cast<String, dynamic>()));
+        }
+      }
+    } catch (_) {
+      // Not JSON; ignore.
     }
   }
 
@@ -236,9 +285,16 @@ class AgentLoop {
     List<WebSource>? webSources,
     List<DocChunk>? ragChunks,
     bool research = false,
+    List<ToolDefinition>? tools,
   }) {
     final buf = StringBuffer();
     buf.writeln('You are OpenPRX, a helpful assistant. Be clear and concise. Use markdown.');
+    if (tools != null && tools.isNotEmpty) {
+      buf.writeln();
+      buf.writeln('You have access to web tools. When you use web_search or fetch_page, '
+          'record the source number for every claim you make and cite it inline like [1], [2]. '
+          'If a source number is not available, cite [web].');
+    }
     if (ragChunks != null && ragChunks.isNotEmpty) {
       buf.writeln();
       buf.writeln('The following documents are provided as primary context. '
@@ -268,7 +324,7 @@ class AgentLoop {
 
   ToolDefinition get _webSearchTool => ToolDefinition(
         name: 'web_search',
-        description: 'Search the web for up-to-date information.',
+        description: 'Search the web for up-to-date information. Returns a JSON array of results with url, title, and markdown.',
         parameters: [
           ToolParam.string('query', description: 'Search query', required: true),
           ToolParam.integer('limit', description: 'Number of results (1-10)', required: false),
@@ -292,7 +348,7 @@ class AgentLoop {
           if (firecrawl == null) return 'Web fetch is not configured.';
           final url = params.getRequiredString('url');
           final result = await firecrawl!.scrape(url);
-          return result.markdown;
+          return jsonEncode(result.toJson());
         },
       );
 }

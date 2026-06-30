@@ -44,4 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/build/
-worker/
+worker/node_modules/
+worker/.wrangler/
+worker/dist/
